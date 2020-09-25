@@ -376,4 +376,4 @@ def update_card_text_1(n_clicks, dropdown_value, check_list_value, radio_items_v
 
 
 if __name__ == '__main__':
-    app.run_server(port='8085', debug=True)
+    app.run_server(debug=True)

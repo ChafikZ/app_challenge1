@@ -245,6 +245,7 @@ content = html.Div(
 app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.layout = html.Div([sidebar, content])
 
+server = app.server
 
 @app.callback(
     Output('graph_1', 'figure'),

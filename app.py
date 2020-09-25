@@ -7,11 +7,27 @@ import dash_html_components as html
 from dash.dependencies import Input, Output, State
 
 import pandas as pd
+import numpy as np
 
 import plotly.express as px
+import seaborn as sns
+import plotly.graph_objects as go
+
+# K-means function
+from sklearn.cluster import KMeans
+
+# Function to standardize the data 
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+# Functions for hierarchical clustering
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.cluster.hierarchy import cophenet
+from scipy.spatial.distance import pdist
 
 df_foot = pd.read_csv('footdata.csv')
 df = pd.read_csv('team_win_bet.csv')
+data_villes = pd.read_csv('data_villes.csv')
 
 home_shots = df_foot[['HomeTeam', 'FTHG', 'HS', 'HST']] #buts, tirs, tirs cadrés E1
 away_shots = df_foot[['AwayTeam', 'HTAG', 'AS', 'AST']] #buts, tirs, tirs cadrés E2
@@ -21,7 +37,50 @@ total_shots = pd.concat([home_shots, away_shots]) #on combine les deux dataframe
 total_shots = total_shots.groupby('team').sum() #nb de buts, tirs et tirs cadrés pour chaque équipe
 
 total_shots = total_shots.reset_index()
-total_shots
+
+teams = df_foot.HomeTeam.unique()
+
+
+
+
+df_HA_win = df_foot.filter(['HomeTeam','AwayTeam','B365H','B365D','B365A','FTR'])
+df_HA_win["BetTeam"] = ''
+df_HA_win['BetTeam'] = df_HA_win.iloc[0:][['B365H', 'B365D', 'B365A']].idxmin(axis=1)
+df_HA_win['BetTeam'] = df_HA_win['BetTeam'].str.replace(r'B365', '')
+
+
+df_team_win_bet = pd.DataFrame(columns = ['Team','nb_win','nb_good_bet'])
+
+for i in range(0,len(teams)):
+    nbwinH_team = len(df_HA_win[(df_HA_win['HomeTeam']==teams[i]) & (df_HA_win['BetTeam'] =='H')])
+    nbwinA_team = len(df_HA_win[(df_HA_win['AwayTeam']==teams[i]) & (df_HA_win['BetTeam'] =='A')])
+    nbwin_team = nbwinH_team + nbwinA_team
+
+    nbwinBH_team = len(df_HA_win[(df_HA_win['HomeTeam']==teams[i]) & (df_HA_win['BetTeam'] =='H') & (df_HA_win['BetTeam']=='H')])
+    nbwinBA_team = len(df_HA_win[(df_HA_win['AwayTeam']==teams[i]) & (df_HA_win['BetTeam'] =='H') & (df_HA_win['BetTeam']=='A')])
+    nbwinB_team = nbwinBH_team + nbwinBA_team
+    df_team_win_bet = df_team_win_bet.append({'Team': teams[i], 'nb_win': nbwin_team, 'nb_good_bet': nbwinB_team}, ignore_index=True)
+
+data_villes = data_villes.set_index(data_villes.iloc[:,0])
+data_villes = data_villes.drop(data_villes.columns[0], axis=1)
+X2 = data_villes.values
+
+std_scale2 = StandardScaler().fit(X2)
+X_scaled2 = std_scale2.transform(X2)
+pca = PCA().fit(X_scaled2[:,:12])
+
+X_proj2 = pca.transform(X_scaled2[:,:12])
+	
+kmeans_multiple = KMeans(n_clusters=2,n_init=40,init='random').fit(X_proj2)
+centers=kmeans_multiple.cluster_centers_
+
+test = []
+for i in range(len(kmeans_multiple.labels_)):
+    if kmeans_multiple.labels_[i] == 1:
+        test.append('red')
+    else:
+        test.append('green')
+		
 # the style arguments for the sidebar.
 SIDEBAR_STYLE = {
     'position': 'fixed',
@@ -52,87 +111,22 @@ CARD_TEXT_STYLE = {
 
 controls = dbc.FormGroup(
     [
-        html.P('Dropdown', style={
-            'textAlign': 'center'
-        }),
-        dcc.Dropdown(
-            id='dropdown',
-            options=[{
-                'label': 'Value One',
-                'value': 'value1'
-            }, {
-                'label': 'Value Two',
-                'value': 'value2'
-            },
-                {
-                    'label': 'Value Three',
-                    'value': 'value3'
-                }
-            ],
-            value=['value1'],  # default value
-            multi=True
-        ),
-        html.Br(),
-        
-        html.P('Check Box', style={
-            'textAlign': 'center'
-        }),
-        dbc.Card([dbc.Checklist(
-            id='check_list',
-            options=[{
-                'label': 'Value One',
-                'value': 'value1'
-            },
-                {
-                    'label': 'Value Two',
-                    'value': 'value2'
-                },
-                {
-                    'label': 'Value Three',
-                    'value': 'value3'
-                }
-            ],
-            value=['value1', 'value2'],
-            inline=True
-        )]),
-        html.Br(),
-        html.P('Radio Items', style={
-            'textAlign': 'center'
-        }),
-        dbc.Card([dbc.RadioItems(
-            id='radio_items',
-            options=[{
-                'label': 'Value One',
-                'value': 'value1'
-            },
-                {
-                    'label': 'Value Two',
-                    'value': 'value2'
-                },
-                {
-                    'label': 'Value Three',
-                    'value': 'value3'
-                }
-            ],
-            value='value1',
-            style={
-                'margin': 'auto'
-            }
-        )]),
-        html.Br(),
-        dbc.Button(
-            id='submit_button',
-            n_clicks=0,
-            children='Submit',
-            color='primary',
-            block=True
-        ),
+        dcc.Markdown('''
+			#### Dash and Markdown
+
+			Dash supports [Markdown](http://commonmark.org/help).
+
+			Markdown is a simple way to write and format text.
+			It includes a syntax for things like **bold text** and *italics*,
+			[links](http://commonmark.org/help), inline `code` snippets, lists,
+			quotes, and more.
+			'''),
     ]
 )
 
 sidebar = html.Div(
     [
-        html.H2('Paramètres', style=TEXT_STYLE),
+        html.H2('Informations sur la démarche', style=TEXT_STYLE),
         html.Hr(),
         controls
     ],
@@ -141,19 +135,7 @@ sidebar = html.Div(
 
 content_first_row = dbc.Row([
     dbc.Col(
-        dbc.Card(
-            [
-
-                dbc.CardBody(
-                    [
-                        html.H4(id='card_title_1', children=['Card Title 1'], className='card-title',
-                                style=CARD_TEXT_STYLE),
-                        html.P(id='card_text_1', children=['Sample text.'], style=CARD_TEXT_STYLE),
-                    ]
-                )
-            ]
-        ),
-        md=3
+        md=2
     ),
     dbc.Col(
         dbc.Card(
@@ -161,8 +143,8 @@ content_first_row = dbc.Row([
 
                 dbc.CardBody(
                     [
-                        html.H4('Card Title 2', className='card-title', style=CARD_TEXT_STYLE),
-                        html.P('Sample text.', style=CARD_TEXT_STYLE),
+                        html.H4("Membres de l'équipe", className='card-title', style=CARD_TEXT_STYLE),
+                        html.P('Guillaume Chiquet, Fabien Dufay, Soriba Diabi, Chafik Zerrouki', style=CARD_TEXT_STYLE),
                     ]
                 ),
             ]
@@ -175,26 +157,16 @@ content_first_row = dbc.Row([
             [
                 dbc.CardBody(
                     [
-                        html.H4('Card Title 3', className='card-title', style=CARD_TEXT_STYLE),
-                        html.P('Sample text.', style=CARD_TEXT_STYLE),
+                        html.H4('Présentation du jeu de données', className='card-title', style=CARD_TEXT_STYLE),
+                        html.P('Notre jeu de données contient l’ensemble des matchs du championnat de France de Football 2007-2008. Ce championnat est composé de 20 équipes qui s’affrontent lors des matchs allers-retours.', style=CARD_TEXT_STYLE),
                     ]
                 ),
             ]
 
         ),
-        md=3
+        md=4
     ),
     dbc.Col(
-        dbc.Card(
-            [
-                dbc.CardBody(
-                    [
-                        html.H4('Card Title 4', className='card-title', style=CARD_TEXT_STYLE),
-                        html.P('Sample text.', style=CARD_TEXT_STYLE),
-                    ]
-                ),
-            ]
-        ),
         md=3
     )
 ])
@@ -202,21 +174,55 @@ content_first_row = dbc.Row([
 content_second_row = dbc.Row(
     [
         dbc.Col(
-            dcc.Graph(id='graph_1'), md=4
+            dcc.Graph(figure =  px.imshow(data_villes.corr(), color_continuous_scale=px.colors.sequential.Viridis) 
+							), md=4
         ),
         dbc.Col(
-            dcc.Graph(id='graph_2'), md=4
+            dcc.Graph(figure = px.bar(df, x="Team", y="nb_win").update_xaxes(categoryorder='total descending')), md=4
         ),
         dbc.Col(
-            dcc.Graph(id='graph_3'), md=4
+             md=4
         )
     ]
 )
 
+content_text = dbc.Row([
+    dbc.Col(
+        md=2
+    ),
+
+    dbc.Col(
+        dbc.Card(
+            [
+                dbc.CardBody(
+                    [
+                        html.H4('Analyse jeu de donnée', className='card-title', style=CARD_TEXT_STYLE),
+                        html.P("Au cours de ce championnat il y a eu 167 victoires à domicile, 97 à l'extérieur et 116 matchs nuls.", style=CARD_TEXT_STYLE),
+                    ]
+                ),
+            ]
+
+        ),
+        md=8
+    ),
+    dbc.Col(
+        md=2
+    )
+])
+
 content_third_row = dbc.Row(
     [
         dbc.Col(
-            dcc.Graph(id='graph_4'), md=12,
+            dcc.Graph(figure = go.Figure(data=[
+				go.Bar(name='Buts', x=total_shots['team'], y=total_shots['buts']),
+				go.Bar(name='Tirs', x=total_shots['team'], y=total_shots['tirs']),
+				go.Bar(name='Tirs cadrés', x=total_shots['team'], y=total_shots['tirs cadrés']),
+			])
+			
+			)
+			
+			
+			, md=12,
         )
     ]
 )
@@ -234,10 +240,11 @@ content_fourth_row = dbc.Row(
 
 content = html.Div(
     [
-        html.H2('Challenge 1 - IMT Atlantique', style=TEXT_STYLE),
+        html.H1('Challenge 1 - IMT Atlantique', style=TEXT_STYLE),
         html.Hr(),
         content_first_row,
         content_second_row,
+		content_text,
         content_third_row,
         content_fourth_row
     ],
@@ -249,133 +256,10 @@ app.layout = html.Div([sidebar, content])
 
 server = app.server
 
-@app.callback(
-    Output('graph_1', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_1(n_clicks, dropdown_value,  check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    print(check_list_value)
-    print(radio_items_value)
-    fig = {
-        'data': [{
-            'x': [1, 2, 3],
-            'y': [3, 4, 5]
-        }]
-    }
-    return fig
 
 
-@app.callback(
-    Output('graph_2', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_2(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    print(check_list_value)
-    print(radio_items_value)
-    fig = px.bar(df, x="Team", y="nb_win").update_xaxes(categoryorder='total descending')
-    return fig
 
 
-@app.callback(
-    Output('graph_3', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_3(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    print(check_list_value)
-    print(radio_items_value)
-    df = px.data.iris()
-    fig = px.density_contour(df, x='sepal_width', y='sepal_length')
-    return fig
-
-
-@app.callback(
-    Output('graph_4', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_4(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    print(check_list_value)
-    print(radio_items_value)  # Sample data and figure
-    fig = px.bar(total_shots, x="team", y=["buts", "tirs", "tirs cadrés"])
-    return fig
-
-
-@app.callback(
-    Output('graph_5', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_5(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    
-    print(check_list_value)
-    print(radio_items_value)  # Sample data and figure
-    df = px.data.iris()
-    fig = px.scatter(df, x='sepal_width', y='sepal_length')
-    return fig
-
-
-@app.callback(
-    Output('graph_6', 'figure'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_graph_6(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-  
-    print(check_list_value)
-    print(radio_items_value)  # Sample data and figure
-    df = px.data.tips()
-    fig = px.bar(df, x='total_bill', y='day', orientation='h')
-    return fig
-
-
-@app.callback(
-    Output('card_title_1', 'children'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'), State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_card_title_1(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
- 
-    print(check_list_value)
-    print(radio_items_value)  # Sample data and figure
-    return 'Card Tile 1 change by call back'
-
-
-@app.callback(
-    Output('card_text_1', 'children'),
-    [Input('submit_button', 'n_clicks')],
-    [State('dropdown', 'value'),  State('check_list', 'value'),
-     State('radio_items', 'value')
-     ])
-def update_card_text_1(n_clicks, dropdown_value, check_list_value, radio_items_value):
-    print(n_clicks)
-    print(dropdown_value)
-    print(check_list_value)
-    print(radio_items_value)  # Sample data and figure
-    return 'Card text change by call back'
 
 
 if __name__ == '__main__':
